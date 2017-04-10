@@ -2,30 +2,29 @@
 title: "Prediction Assignment"
 author: "Neil Fernandes"
 date: "4/7/2017"
-output: html_document
+output: pdf_document
 ---
 
 ###Approach
 
 The outcome variable is classe, a factor variable with 5 levels. The levels are: Class A (exactly according to the specification), Class B (throwing the elbows to the front), Class C (lifting the dumbbell only halfway), Class D (lowering the dumbbell only halfway), Class E (throwing the hips to the front)
 
-
-Prediction evaluations will be based on maximizing accuracy and minimizing out of sample error. All other available variables will be used for prediction. Two models will be tested using decision tree and random forest algorithms. 
+Predictions in this report are based on optimal accuracy and out of sample error. Two models will be tested using decision tree and random forest algorithms. 
 
 ###Cross Validation
 
-Cross-validation will be performed by subsampling our training data set randomly without replacement into 2 subsamples: subTraining data (70% of the original Training data set) and subTesting data (30%). Our models will be fitted on the subTraining data set, and tested on the subTesting data. Once the most accurate model is choosen, it will be tested on the original Testing data set.
+Cross-validation will be performed by subsampling our training data set randomly without replacement (With replacement is boostrapping) into 2 subsamples: subTraining data (70% of the original Training data set) and subTesting data (30%, which is not trained on in an effort to avoid overfitting). Our models will be fitted on the subTraining data set, and then tested on the subTesting data. Once the most accurate model is found, it will be tested on the original Testing data set.
 
-###Expected out of sample error
+###Expected Error rate
 
-The expected out-of-sample error will correspond to the quantity: 1-accuracy in the cross-validation data. Accuracy is the proportion of correct classified observation over the total sample in the subTesting data set. Expected accuracy is the expected accuracy in the out-of-sample data set (i.e. original testing data set). Thus, the expected value of the out-of-sample error will correspond to the expected number of missclassified observations/total observations in the Test data set, which is the quantity: 1-accuracy found from the cross-validation data set.
+The expected out-of-sample error will correspond to the quantity: 1-accuracy in the cross-validation data. The expected out of sample error will correlate to the expected missclassification observations/total observations in the Test data set which is equal to 1 minus cross validation accuracy.
 
 ###Notes
 
 Features with all missing values will be discarded as well as features that are irrelevant. All other features will be kept as relevant variables.
-Decision tree and random forest algorithms are known for their ability of detecting the features that are important for classification [2]. Feature selection is inherent, so it is not so necessary at the data preparation phase. Thus, there won’t be any feature selection section in this report.
+Decision tree and random forest algorithms are known for their ability to detect the features that are important for classification. Feature selection is built in, so I am skipping feature selection because it is already chosen.
 
-As for the limitation in this study, the observation data used in the analyses was collected from 6 young health participants in an experiment using Microsoft Kinect. Therefore, under those condition, the model is expected to perform over 95% accuracy; however, with different conditions, such as experiments with elderly people and/or using different device, the model might not perform well as shown in the analysis.
+As for the limitation in this study, the observation data used in the analyses was collected from 6 young health participants in an experiment using a Microsoft Kinect. This leads us to believe the model should be at least 95% accurate. This model is based on 6 young healthy participants so any deviations from those types of participants may lead to less accurate results.
 
 
 ##Results
@@ -33,7 +32,7 @@ As for the limitation in this study, the observation data used in the analyses w
 Install the necessary packages and libraries
 
 ```{r}
-#install.packages(caret); 
+#install.packages(caret); #only need to install packages once and then just call on libraries
 #install.packages(randomForest);
 #install.packages(rpart); 
 #install.packages(rpart.plot)
@@ -45,26 +44,31 @@ library(randomForest);
 library(rpart); 
 library(rpart.plot);
 
-set.seed(385) #For Reproducibility 
+set.seed(385) #For Reproducibility (If you want to get the same results) 
 ```
 
 ```{r}
-trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+training <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
 
-testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testing <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
 
-trainingset <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+trainingset <- read.csv(url(training), na.strings=c("NA","#DIV/0!",""))
 
-testingset <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+testingset <- read.csv(url(testing), na.strings=c("NA","#DIV/0!",""))
 
-# Perform exploratory analysis - 
-# dim(trainingset); dim(testingset); summary(trainingset); summary(testingset); str(trainingset); str(testingset); head(trainingset); head(testingset);               
+# Perform exploratory analysis,  - 
+# dim(trainingset); dim(testingset); 
+#summary(trainingset); summary(testingset); 
+#str(trainingset); str(testingset); 
+#head(trainingset); head(testingset);
+#these are commented out to save space
 
-# Delete columns with all missing values
+# Delete columns with all missing values, we do not these to offset out results
 trainingset<-trainingset[,colSums(is.na(trainingset)) == 0]
 testingset <-testingset[,colSums(is.na(testingset)) == 0]
 
-# Delete variables are irrelevant to our current project: user_name, raw_timestamp_part_1, raw_timestamp_part_,2 cvtd_timestamp, new_window, and  num_window (columns 1 to 7). 
+# Delete variables are irrelevant to our current project (user_name, raw_timestamp_part_1, raw_timestamp_part_,2 cvtd_timestamp, new_window, and  num_window (columns 1 to 7)).
+#We really just want to know about their health and times
 trainingset   <-trainingset[,-c(1:7)]
 testingset <-testingset[,-c(1:7)]
 
@@ -73,9 +77,21 @@ traintrainset <- createDataPartition(y=trainingset$classe, p=0.70, list=FALSE)
 TrainTrainingSet <- trainingset[traintrainset, ] 
 TestTrainingSet <- trainingset[-traintrainset, ]
 
-# The variable "classe" contains 5 levels: A, B, C, D and E. A plot of the outcome variable will allow us to see the frequency of each levels in the TrainTrainingSet data set and # compare one another.
+# A plot of the outcome variable will allow us to see the frequency of each levels in the TrainTrainingSet data set and compare one another.
 
-plot(TrainTrainingSet$classe, col="purple", main="Plot of levels of variable classe within the TrainTrainingSet data set", xlab="classe", ylab="Frequency")
+plot(TrainTrainingSet$classe, col="purple", main="Classe Variable Levels (TrainTrainingSet)", xlab="classe", ylab="Frequency")
+```
+
+## Random Forest
+
+```{r}
+model2 <- randomForest(classe ~. , data=TrainTrainingSet, method="class")
+
+# Predicting:
+prediction2 <- predict(model2, TestTrainingSet, type = "class")
+
+# Test results on TestTrainingSet data set:
+confusionMatrix(prediction2, TestTrainingSet$classe)
 ```
 
 ## Decision Tree
@@ -95,21 +111,10 @@ confusionMatrix(prediction1, TestTrainingSet$classe)
 ```
 
 
-## Random Forest
-
-```{r}
-model2 <- randomForest(classe ~. , data=TrainTrainingSet, method="class")
-
-# Predicting:
-prediction2 <- predict(model2, TestTrainingSet, type = "class")
-
-# Test results on TestTrainingSet data set:
-confusionMatrix(prediction2, TestTrainingSet$classe)
-```
 
 ##Decision
 
-Random Forest algorithm performed better than Decision Trees. Accuracy for Random Forest model was 0.9954 (95% CI: (0.9933, 0.997)) compared to Decision Tree model with 0.741 (95% CI: (0.7296, 0.7522)). The Random Forests model is choosen. The expected out-of-sample error is estimated at 0.005, or 0.5%.
+Random Forest seems to be a better choice than Decision Trees. Random Forest was .9954 accurate with a 95% Confidence Interval (0.9933, 0.997) while Decision Tree was .741 with a 95% Confidence Interval (0.7296, 0.7522). The expected out of sample error is .5%.
 
 
 ##Submission
